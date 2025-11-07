@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
-import { authService } from '../services/api';
+import { useRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { gsap } from "gsap";
+import { useGSAP } from "@gsap/react";
 
 export default function Cadastro() {
   const [formData, setFormData] = useState({
@@ -15,6 +16,13 @@ export default function Cadastro() {
   const [senhaVisivel, setSenhaVisivel] = useState(false);
   const [alerta, setAlerta] = useState(null);
   const [carregando, setCarregando] = useState(false);
+
+  // refs GSAP
+  const scope = useRef(null);
+  const leftRef = useRef(null);
+  const cardRef = useRef(null);
+  const fieldsRef = useRef(null);
+  const submitBtnRef = useRef(null);
 
   const mostrarAlerta = (mensagem, sucesso) => {
     setAlerta({ mensagem, sucesso });
@@ -63,12 +71,7 @@ export default function Cadastro() {
     }
 
     if (senha !== confirmarSenha) {
-      mostrarAlerta('As senhas não coincidem!', false);
-      return;
-    }
-
-    if (!validarSenha(senha)) {
-      mostrarAlerta('A senha deve ter pelo menos 8 caracteres, 1 letra maiúscula, 1 número e 1 símbolo!', false);
+      mostrarAlerta("As senhas não coincidem!", false);
       return;
     }
 
@@ -80,7 +83,11 @@ export default function Cadastro() {
     setCarregando(true);
 
     try {
-      let resultado;
+      const resp = await fetch("http://localhost:5000/api/usuarios/cadastro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, dataNasc, sexo, email, senha }),
+      });
       
       if (tipo === 'paciente') {
         resultado = await authService.cadastrarPaciente({
@@ -109,39 +116,62 @@ export default function Cadastro() {
           window.location.href = tipo === 'paciente' ? '/home' : '/profissional';
         }, 1500);
       } else {
-        mostrarAlerta(resultado.error || 'Erro no cadastro', false);
+        mostrarAlerta("Erro no cadastro. Verifique os dados.", false);
       }
-    } catch (error) {
-      console.error('Erro no cadastro:', error);
-      mostrarAlerta('Erro de conexão. Tente novamente.', false);
+    } catch {
+      mostrarAlerta("Erro na requisição. Tente novamente mais tarde.", false);
     } finally {
       setCarregando(false);
     }
   };
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
+  // animações
+  useGSAP(
+    () => {
+      gsap.from(leftRef.current, { 
+        x: "-8%", 
+        opacity: 0, 
+        duration: 0.8, 
+        ease: "power3.out" 
+      });
+      
+      gsap.from(cardRef.current, { 
+        y: 28, 
+        opacity: 0, 
+        duration: 0.8, 
+        ease: "power3.out", 
+        delay: 0.1 
+      });
+      
+      const items = fieldsRef.current
+        ? Array.from(fieldsRef.current.querySelectorAll("[data-field]"))
+        : [];
+      gsap.from(items, {
+        y: 16,
+        opacity: 0,
+        stagger: 0.07,
+        duration: 0.5,
+        ease: "power2.out",
+        delay: 0.2,
+      });
 
-  const TipoUsuarioBotao = ({ tipo, label }) => {
-    const selecionado = formData.tipo === tipo;
-    return (
-      <button
-        type="button"
-        onClick={() => handleChange('tipo', tipo)}
-        className={`flex-1 py-3 rounded-full font-medium transition-all ${
-          selecionado 
-            ? "bg-[#9B7BFF] text-white shadow-lg" 
-            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-        }`}
-      >
-        {label}
-      </button>
-    );
-  };
+      const onEnter = () => gsap.to(submitBtnRef.current, { 
+        scale: 1.02, 
+        duration: 0.15 
+      });
+      const onLeave = () => gsap.to(submitBtnRef.current, { 
+        scale: 1, 
+        duration: 0.15 
+      });
+      submitBtnRef.current?.addEventListener("mouseenter", onEnter);
+      submitBtnRef.current?.addEventListener("mouseleave", onLeave);
+      return () => {
+        submitBtnRef.current?.removeEventListener("mouseenter", onEnter);
+        submitBtnRef.current?.removeEventListener("mouseleave", onLeave);
+      };
+    },
+    { scope }
+  );
 
   // Calcular idade máxima e mínima para o date picker
   const hoje = new Date();
@@ -149,36 +179,34 @@ export default function Cadastro() {
   const dataMaxima = new Date(hoje.getFullYear() - 1, hoje.getMonth(), hoje.getDate());
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center p-6">
-      {/* Alerta */}
+    <div ref={scope} className="min-h-screen grid grid-cols-1 md:grid-cols-2 bg-gradient-to-br from-blue-50 to-purple-50">
+      {/* ALERTA */}
       {alerta && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
           <div
             className={`px-6 py-3 rounded-lg shadow-lg ${
               alerta.sucesso ? "bg-green-500" : "bg-red-500"
-            } text-white font-medium flex items-center gap-2`}
+            } text-white font-ubuntu flex items-center gap-2`}
           >
             {alerta.sucesso ? "✅" : "❌"} {alerta.mensagem}
           </div>
         </div>
       )}
 
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-3xl shadow-2xl p-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-[#9B7BFF] rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-white text-2xl">🧬</span>
-            </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Criar Conta</h1>
-            <p className="text-gray-600">Junte-se à nossa plataforma</p>
+      {/* ESQUERDA - Layout do Login (Gradiente Roxo) */}
+      <div 
+        ref={leftRef}
+        className="hidden md:flex flex-col items-center justify-center bg-gradient-to-br from-[#9B7BFF] to-[#7E5BFF] text-white p-8"
+      >
+        <div className="text-center">
+          <div className="w-32 h-32 bg-white rounded-2xl flex items-center justify-center mb-6 mx-auto shadow-2xl">
+            <span className="text-[#9B7BFF] text-4xl font-bold">🧬</span>
           </div>
-
-          {/* Seletor de Tipo */}
-          <div className="bg-gray-100 rounded-full p-1 flex gap-1 mb-6">
-            <TipoUsuarioBotao tipo="paciente" label="Paciente" />
-            <TipoUsuarioBotao tipo="profissional" label="Profissional" />
-          </div>
+          <h1 className="text-5xl font-bold font-ubuntu mb-4">GenoWeb</h1>
+          <p className="text-xl opacity-90">Sistema de Análise Genética Familiar</p>
+          <p className="mt-4 opacity-75">Gerencie históricos genéticos da sua família de forma segura e intuitiva</p>
+        </div>
+      </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Nome */}
@@ -293,29 +321,78 @@ export default function Cadastro() {
               />
             </div>
 
-            {/* Botão de Cadastro */}
-            <button
-              type="submit"
-              disabled={carregando}
-              className="w-full bg-[#9B7BFF] text-white py-3 rounded-xl font-medium hover:bg-[#8B6BFF] disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg hover:shadow-xl mt-6"
-            >
-              {carregando ? "Cadastrando..." : "Criar Conta"}
-            </button>
+                {/* Senha */}
+                <div data-field>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Senha
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={senhaVisivel ? "text" : "password"}
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                      placeholder="Crie uma senha"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition pr-12"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSenhaVisivel(!senhaVisivel)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                    >
+                      {senhaVisivel ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                </div>
 
-            {/* Link para login */}
-            <div className="text-center">
-              <p className="text-gray-600">
-                Já tem uma conta?{" "}
-                <a href="/login" className="text-[#9B7BFF] hover:underline font-medium">
-                  Fazer login
-                </a>
-              </p>
-            </div>
-          </form>
+                {/* Confirmar senha */}
+                <div data-field>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Confirmar senha
+                  </label>
+                  <input
+                    type={senhaVisivel ? "text" : "password"}
+                    value={confirmarSenha}
+                    onChange={(e) => setConfirmarSenha(e.target.value)}
+                    placeholder="Repita sua senha"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Botão Cadastrar */}
+              <button
+                ref={submitBtnRef}
+                type="submit"
+                disabled={carregando}
+                className="w-full bg-[#9B7BFF] text-white py-3 rounded-xl font-medium hover:bg-[#8B6BFF] disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg hover:shadow-xl mt-6"
+              >
+                {carregando ? "Cadastrando..." : "Cadastrar"}
+              </button>
+
+              {/* Link para login */}
+              <div className="text-center mt-6">
+                <p className="text-gray-600">
+                  Já tem uma conta?{" "}
+                  <a href="/login" className="text-[#9B7BFF] hover:underline font-medium">
+                    Faça login
+                  </a>
+                </p>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      </main>
 
+      {/* Estilos */}
       <style jsx>{`
+        @import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
+        
+        .font-ubuntu {
+          font-family: 'Ubuntu', sans-serif;
+        }
+
         @keyframes fade-in {
           from {
             opacity: 0;
