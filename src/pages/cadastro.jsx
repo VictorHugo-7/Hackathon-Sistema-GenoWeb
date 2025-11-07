@@ -4,12 +4,15 @@ import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
 
 export default function Cadastro() {
-  const [nome, setNome] = useState("");
-  const [dataNasc, setDataNasc] = useState("");
-  const [sexo, setSexo] = useState(""); // "masculino" | "feminino"
-  const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
-  const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [formData, setFormData] = useState({
+    nome: '',
+    email: '',
+    senha: '',
+    confirmarSenha: '',
+    sexo: '',
+    data_nascimento: '',
+    tipo: 'paciente' // 'paciente' ou 'profissional'
+  });
   const [senhaVisivel, setSenhaVisivel] = useState(false);
   const [alerta, setAlerta] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -26,22 +29,54 @@ export default function Cadastro() {
     setTimeout(() => setAlerta(null), 3000);
   };
 
-  const handleCadastro = async (e) => {
+  const validarSenha = (senha) => {
+    const regex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    return regex.test(senha);
+  };
+
+  const validarEmail = (email) => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
+
+  const validarDataNascimento = (data) => {
+    if (!data) return false;
+    
+    const dataNasc = new Date(data);
+    const hoje = new Date();
+    const idade = hoje.getFullYear() - dataNasc.getFullYear();
+    
+    return dataNasc instanceof Date && !isNaN(dataNasc) && idade >= 1 && idade <= 120;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!nome || !dataNasc || !sexo || !email || !senha || !confirmarSenha) {
-      mostrarAlerta("Preencha todos os campos!", false);
+    const { nome, email, senha, confirmarSenha, sexo, data_nascimento, tipo } = formData;
+
+    // Validações
+    if (!nome || !email || !senha || !confirmarSenha) {
+      mostrarAlerta('Preencha todos os campos!', false);
       return;
     }
 
-    // validação simples de email
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      mostrarAlerta("Informe um email válido.", false);
+    if (tipo === 'paciente' && (!sexo || !data_nascimento)) {
+      mostrarAlerta('Selecione o sexo e preencha a data de nascimento!', false);
+      return;
+    }
+
+    if (!validarEmail(email)) {
+      mostrarAlerta('Por favor, insira um email válido!', false);
       return;
     }
 
     if (senha !== confirmarSenha) {
       mostrarAlerta("As senhas não coincidem!", false);
+      return;
+    }
+
+    if (tipo === 'paciente' && !validarDataNascimento(data_nascimento)) {
+      mostrarAlerta('Data de nascimento inválida. A pessoa deve ter entre 1 e 120 anos.', false);
       return;
     }
 
@@ -54,9 +89,32 @@ export default function Cadastro() {
         body: JSON.stringify({ nome, dataNasc, sexo, email, senha }),
       });
       
-      if (resp.ok) {
-        mostrarAlerta("Cadastro realizado com sucesso!", true);
-        setTimeout(() => (window.location.href = "/login"), 1500);
+      if (tipo === 'paciente') {
+        resultado = await authService.cadastrarPaciente({
+          nome,
+          email,
+          senha,
+          sexo,
+          data_nascimento
+        });
+      } else {
+        resultado = await authService.cadastrarProfissional({
+          nome,
+          email,
+          senha
+        });
+      }
+
+      if (resultado.token) {
+        // Salva token e redireciona
+        localStorage.setItem('token', resultado.token);
+        localStorage.setItem('user', JSON.stringify(resultado.user));
+        
+        mostrarAlerta('Cadastro realizado com sucesso!', true);
+        
+        setTimeout(() => {
+          window.location.href = tipo === 'paciente' ? '/home' : '/profissional';
+        }, 1500);
       } else {
         mostrarAlerta("Erro no cadastro. Verifique os dados.", false);
       }
@@ -115,6 +173,11 @@ export default function Cadastro() {
     { scope }
   );
 
+  // Calcular idade máxima e mínima para o date picker
+  const hoje = new Date();
+  const dataMinima = new Date(hoje.getFullYear() - 120, hoje.getMonth(), hoje.getDate());
+  const dataMaxima = new Date(hoje.getFullYear() - 1, hoje.getMonth(), hoje.getDate());
+
   return (
     <div ref={scope} className="min-h-screen grid grid-cols-1 md:grid-cols-2 bg-gradient-to-br from-blue-50 to-purple-50">
       {/* ALERTA */}
@@ -145,96 +208,118 @@ export default function Cadastro() {
         </div>
       </div>
 
-      {/* DIREITA - Formulário de Cadastro */}
-      <main className="flex items-center justify-center p-6">
-        <div ref={cardRef} className="w-full max-w-md">
-          <div className="bg-white rounded-3xl shadow-2xl p-8">
-            {/* Header do Form */}
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold font-ubuntu text-gray-800 mb-2">
-                Crie sua conta
-              </h2>
-              <p className="text-gray-600">Preencha seus dados abaixo</p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Nome */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome Completo *
+              </label>
+              <input
+                type="text"
+                value={formData.nome}
+                onChange={(e) => handleChange('nome', e.target.value)}
+                placeholder="Seu nome completo"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                required
+              />
             </div>
 
-            {/* Formulário */}
-            <form onSubmit={handleCadastro}>
-              {/* fields container para stagger */}
-              <div ref={fieldsRef} className="space-y-6">
-                {/* Nome */}
-                <div data-field>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nome completo
-                  </label>
-                  <input
-                    type="text"
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    placeholder="Digite seu nome completo"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
-                    required
-                  />
-                </div>
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email *
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleChange('email', e.target.value)}
+                placeholder="seu@email.com"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                required
+              />
+            </div>
 
-                {/* Data de nascimento */}
-                <div data-field>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Data de nascimento
-                  </label>
-                  <input
-                    type="date"
-                    value={dataNasc}
-                    onChange={(e) => setDataNasc(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
-                    required
-                  />
-                </div>
+            {/* Data de Nascimento (apenas para pacientes) */}
+            {formData.tipo === 'paciente' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data de Nascimento *
+                </label>
+                <input
+                  type="date"
+                  value={formData.data_nascimento}
+                  onChange={(e) => handleChange('data_nascimento', e.target.value)}
+                  min={dataMinima.toISOString().split('T')[0]}
+                  max={dataMaxima.toISOString().split('T')[0]}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Data de nascimento é obrigatória para pacientes
+                </p>
+              </div>
+            )}
 
-                {/* Sexo */}
-                <div data-field>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Sexo
-                  </label>
-                  <div className="flex items-center gap-6">
-                    <label className="inline-flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="sexo"
-                        value="masculino"
-                        checked={sexo === "masculino"}
-                        onChange={(e) => setSexo(e.target.value)}
-                        className="accent-[#9B7BFF]"
-                      />
-                      <span className="font-ubuntu">Masculino</span>
-                    </label>
-                    <label className="inline-flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="sexo"
-                        value="feminino"
-                        checked={sexo === "feminino"}
-                        onChange={(e) => setSexo(e.target.value)}
-                        className="accent-[#9B7BFF]"
-                      />
-                      <span className="font-ubuntu">Feminino</span>
-                    </label>
-                  </div>
-                </div>
+            {/* Sexo (apenas para pacientes) */}
+            {formData.tipo === 'paciente' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sexo *
+                </label>
+                <select
+                  value={formData.sexo}
+                  onChange={(e) => handleChange('sexo', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                  required
+                >
+                  <option value="">Selecione</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Feminino</option>
+                </select>
+              </div>
+            )}
 
-                {/* Email */}
-                <div data-field>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="exemplo@dominio.com"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
-                    required
-                  />
-                </div>
+            {/* Senha */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Senha *
+              </label>
+              <div className="relative">
+                <input
+                  type={senhaVisivel ? "text" : "password"}
+                  value={formData.senha}
+                  onChange={(e) => handleChange('senha', e.target.value)}
+                  placeholder="Crie uma senha forte"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition pr-12"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setSenhaVisivel(!senhaVisivel)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                >
+                  {senhaVisivel ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Mínimo 8 caracteres, 1 maiúscula, 1 número e 1 símbolo
+              </p>
+            </div>
+
+            {/* Confirmar Senha */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmar Senha *
+              </label>
+              <input
+                type={senhaVisivel ? "text" : "password"}
+                value={formData.confirmarSenha}
+                onChange={(e) => handleChange('confirmarSenha', e.target.value)}
+                placeholder="Repita sua senha"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                required
+              />
+            </div>
 
                 {/* Senha */}
                 <div data-field>

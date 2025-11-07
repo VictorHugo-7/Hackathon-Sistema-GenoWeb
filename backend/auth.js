@@ -41,15 +41,29 @@ function validarSexo(sexo) {
   return ['M', 'F'].includes(sexo);
 }
 
-// CADASTRO DE PACIENTE
+// Função para validar data de nascimento
+function validarDataNascimento(data) {
+  if (!data) return false;
+  
+  const dataNasc = new Date(data);
+  const hoje = new Date();
+  const idade = hoje.getFullYear() - dataNasc.getFullYear();
+  
+  // Verifica se a data é válida e se a pessoa tem pelo menos 1 ano
+  return dataNasc instanceof Date && !isNaN(dataNasc) && idade >= 1 && idade <= 120;
+}
+
+// CADASTRO DE PACIENTE (CORRIGIDO)
 router.post("/paciente/cadastro", async (req, res) => {
   try {
-    const { nome, email, senha, sexo } = req.body;
+    const { nome, email, senha, sexo, data_nascimento } = req.body;
+
+    console.log('📥 Dados recebidos no cadastro:', { nome, email, sexo, data_nascimento });
 
     // Validações básicas
-    if (!nome || !email || !senha || !sexo) {
+    if (!nome || !email || !senha || !sexo || !data_nascimento) {
       return res.status(400).json({ 
-        error: 'Nome, email, senha e sexo são obrigatórios' 
+        error: 'Nome, email, senha, sexo e data de nascimento são obrigatórios' 
       });
     }
 
@@ -64,6 +78,13 @@ router.post("/paciente/cadastro", async (req, res) => {
     if (!validarSexo(sexo)) {
       return res.status(400).json({ 
         error: 'Sexo deve ser "M" (masculino) ou "F" (feminino)' 
+      });
+    }
+
+    // Validação de data de nascimento
+    if (!validarDataNascimento(data_nascimento)) {
+      return res.status(400).json({ 
+        error: 'Data de nascimento inválida. Deve ser uma data válida e a pessoa deve ter entre 1 e 120 anos.' 
       });
     }
 
@@ -97,12 +118,16 @@ router.post("/paciente/cadastro", async (req, res) => {
     // Hash da senha
     const hashedPassword = await bcrypt.hash(senha, 10);
 
-    // Insere no banco (campos restantes como NULL)
+    console.log('🔑 Senha hash gerada, inserindo no banco...');
+
+    // CORREÇÃO AQUI: Usar a variável data_nascimento em vez de NULL
     const [result] = await pool.execute(
       `INSERT INTO paciente (nome, email, senha, sexo, data_nascimento, diagnostico_previo, painel_genetico, idFamilia) 
-       VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
-      [nome, email, hashedPassword, sexo]
+       VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL)`, // ✅ CORRIGIDO: ?, em vez de NULL
+      [nome, email, hashedPassword, sexo, data_nascimento] // ✅ CORRIGIDO: incluir data_nascimento
     );
+
+    console.log('✅ Paciente inserido com sucesso, ID:', result.insertId);
 
     // Gera token JWT
     const token = jwt.sign(
@@ -124,8 +149,8 @@ router.post("/paciente/cadastro", async (req, res) => {
         nome,
         email,
         sexo,
+        data_nascimento,
         tipo: 'paciente',
-        data_nascimento: null,
         diagnostico_previo: null,
         painel_genetico: null,
         idFamilia: null
@@ -133,7 +158,7 @@ router.post("/paciente/cadastro", async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro no cadastro do paciente:', error);
+    console.error('❌ Erro no cadastro do paciente:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });

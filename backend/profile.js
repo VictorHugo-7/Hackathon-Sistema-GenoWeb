@@ -7,7 +7,6 @@ import crypto from "crypto";
 
 const router = express.Router();
 
-/* ========= FIX: Nodemailer ========= */
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
