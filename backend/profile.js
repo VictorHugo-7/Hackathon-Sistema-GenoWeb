@@ -2,8 +2,58 @@ import express from "express";
 import { authenticateToken } from "./auth.js";
 import pool from "./db.js";
 import bcrypt from "bcryptjs";
+import nodemailer from "nodemailer";
+import crypto from "crypto";
 
 const router = express.Router();
+
+// Configuração do Nodemailer (Gmail)
+const transporter = nodemailer.createTransporter({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER, // Seu email do Gmail
+    pass: process.env.GMAIL_APP_PASSWORD // Senha de app do Gmail
+  }
+});
+
+// Função para gerar senha aleatória
+function gerarSenhaAleatoria(tamanho = 8) {
+  return crypto.randomBytes(tamanho).toString('hex').slice(0, tamanho);
+}
+
+// Função para enviar email com senha
+async function enviarEmailSenha(email, nome, senha) {
+  try {
+    const mailOptions = {
+      from: process.env.GMAIL_USER,
+      to: email,
+      subject: 'Bem-vindo à Família - Sua Senha de Acesso',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2563eb;">Bem-vindo à Plataforma Genética!</h2>
+          <p>Olá <strong>${nome}</strong>,</p>
+          <p>Você foi adicionado a uma família na nossa plataforma de análise genética.</p>
+          <p>Sua conta foi criada com sucesso! Aqui estão seus dados de acesso:</p>
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>Email:</strong> ${email}</p>
+            <p><strong>Senha temporária:</strong> <code style="background: #e5e7eb; padding: 4px 8px; border-radius: 4px;">${senha}</code></p>
+          </div>
+          <p><strong>Importante:</strong> Recomendamos que você altere esta senha no primeiro acesso.</p>
+          <p>Para acessar a plataforma, visite: <a href="http://localhost:5173">http://localhost:5173</a></p>
+          <br>
+          <p>Atenciosamente,<br>Equipe Genética App</p>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email enviado para:', email, 'ID:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao enviar email:', error);
+    return false;
+  }
+}
 
 // Atualizar perfil (diagnóstico e painel genético)
 router.put("/perfil", authenticateToken, async (req, res) => {
@@ -94,7 +144,7 @@ router.post("/familia", authenticateToken, async (req, res) => {
   }
 });
 
-// Adicionar membro à família (com email opcional)
+// Adicionar membro à família (com email opcional) - ATUALIZADA
 router.post("/familia/membros", authenticateToken, async (req, res) => {
   try {
     const { nome, data_nascimento, sexo, email } = req.body;
@@ -122,6 +172,8 @@ router.post("/familia/membros", authenticateToken, async (req, res) => {
       await connection.beginTransaction();
 
       let pacienteId;
+      let senhaGerada = null;
+      let emailEnviado = false;
 
       if (email) {
         // Verifica se já existe um paciente com este email
@@ -148,14 +200,24 @@ router.post("/familia/membros", authenticateToken, async (req, res) => {
             [userFamiliaId, pacienteId]
           );
         } else {
-          // Cria novo paciente com email (sem senha para não poder fazer login)
-          const hashedPassword = await bcrypt.hash('', 10); // Senha vazia
+          // Gera senha aleatória
+          senhaGerada = gerarSenhaAleatoria();
+          const hashedPassword = await bcrypt.hash(senhaGerada, 10);
+          
+          // Cria novo paciente com email
           const [pacienteResult] = await connection.execute(
             `INSERT INTO paciente (nome, data_nascimento, sexo, email, senha, idFamilia) 
              VALUES (?, ?, ?, ?, ?, ?)`,
             [nome, data_nascimento, sexo, email, hashedPassword, userFamiliaId]
           );
           pacienteId = pacienteResult.insertId;
+
+          // Envia email com a senha
+          if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+            emailEnviado = await enviarEmailSenha(email, nome, senhaGerada);
+          } else {
+            console.log('⚠️  Configuração de email não encontrada - pulando envio');
+          }
         }
       } else {
         // Cria paciente sem email (membro falecido, etc.)
@@ -179,7 +241,9 @@ router.post("/familia/membros", authenticateToken, async (req, res) => {
           sexo, 
           email,
           idFamilia: userFamiliaId
-        }
+        },
+        emailEnviado: emailEnviado,
+        senhaGerada: email && !existingPatients?.length ? senhaGerada : undefined
       });
 
     } catch (error) {
