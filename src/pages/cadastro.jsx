@@ -1,224 +1,268 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import { authService } from '../services/api';
 
 export default function Cadastro() {
-  const [emailOrRA, setEmailOrRA] = useState('');
-  const [nome, setNome] = useState('');
-  const [senha, setSenha] = useState('');
-  const [confirmarSenha, setConfirmarSenha] = useState('');
-  const [paginaAtual, setPaginaAtual] = useState('aluno');
+  const [formData, setFormData] = useState({
+    nome: '',
+    email: '',
+    senha: '',
+    confirmarSenha: '',
+    sexo: '',
+    tipo: 'paciente' // 'paciente' ou 'profissional'
+  });
   const [senhaVisivel, setSenhaVisivel] = useState(false);
   const [alerta, setAlerta] = useState(null);
+  const [carregando, setCarregando] = useState(false);
 
   const mostrarAlerta = (mensagem, sucesso) => {
     setAlerta({ mensagem, sucesso });
-    setTimeout(() => {
-      setAlerta(null);
-    }, 2000);
+    setTimeout(() => setAlerta(null), 3000);
   };
 
-  const cadastrar = async () => {
-    const emailOuRA = emailOrRA.trim();
-    const senhaValue = senha.trim();
-    const confirmarValue = confirmarSenha.trim();
-    const nomeValue = nome.trim();
+  const validarSenha = (senha) => {
+    const regex = /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    return regex.test(senha);
+  };
 
-    if (!emailOuRA || !senhaValue || !confirmarValue || !nomeValue) {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    const { nome, email, senha, confirmarSenha, sexo, tipo } = formData;
+
+    // Validações
+    if (!nome || !email || !senha || !confirmarSenha) {
       mostrarAlerta('Preencha todos os campos!', false);
       return;
     }
 
-    if (senhaValue !== confirmarValue) {
+    if (tipo === 'paciente' && !sexo) {
+      mostrarAlerta('Selecione o sexo!', false);
+      return;
+    }
+
+    if (senha !== confirmarSenha) {
       mostrarAlerta('As senhas não coincidem!', false);
       return;
     }
 
-    const rota = paginaAtual === 'professor' ? 'professores' : 'alunos';
-    const url = `http://localhost:5000/api/${rota}/cadastro`;
+    if (!validarSenha(senha)) {
+      mostrarAlerta('A senha deve ter pelo menos 8 caracteres, 1 letra maiúscula, 1 número e 1 símbolo!', false);
+      return;
+    }
 
-    const body =
-      paginaAtual === 'professor'
-        ? { nome: nomeValue, email: emailOuRA, senha: senhaValue }
-        : { nome: nomeValue, ra: emailOuRA, senha: senhaValue };
+    setCarregando(true);
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (response.ok) {
-        mostrarAlerta('Cadastro realizado com sucesso!', true);
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 2000);
+      let resultado;
+      
+      if (tipo === 'paciente') {
+        resultado = await authService.cadastrarPaciente({
+          nome,
+          email,
+          senha,
+          sexo
+        });
       } else {
-        mostrarAlerta('Erro no cadastro. Verifique os dados.', false);
+        resultado = await authService.cadastrarProfissional({
+          nome,
+          email,
+          senha
+        });
       }
-    } catch (e) {
-      mostrarAlerta('Erro na requisição. Tente novamente mais tarde.', false);
+
+      if (resultado.token) {
+        // Salva token e redireciona
+        localStorage.setItem('token', resultado.token);
+        localStorage.setItem('user', JSON.stringify(resultado.user));
+        
+        mostrarAlerta('Cadastro realizado com sucesso!', true);
+        
+        setTimeout(() => {
+          window.location.href = tipo === 'paciente' ? '/home' : '/profissional';
+        }, 1500);
+      } else {
+        mostrarAlerta(resultado.error || 'Erro no cadastro', false);
+      }
+    } catch (error) {
+      console.error('Erro no cadastro:', error);
+      mostrarAlerta('Erro de conexão. Tente novamente.', false);
+    } finally {
+      setCarregando(false);
     }
   };
 
-  const TipoUsuarioBotao = ({ tipo }) => {
-    const selecionado = paginaAtual.toLowerCase() === tipo.toLowerCase();
-    const largura = tipo === 'Aluno' ? 'w-[50px]' : 'w-[70px]';
+  const handleChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
+  const TipoUsuarioBotao = ({ tipo, label }) => {
+    const selecionado = formData.tipo === tipo;
     return (
-      <div className="flex flex-col items-center">
-        <button
-          onClick={() => setPaginaAtual(tipo.toLowerCase())}
-          className="focus:outline-none"
-        >
-          <span
-            className={`text-xl font-ubuntu ${
-              selecionado ? 'font-bold text-[#4A90E2]' : 'font-normal text-black'
-            }`}
-          >
-            {tipo}
-          </span>
-        </button>
-        <div
-          className={`h-[3px] ${largura} mt-1 ${
-            selecionado ? 'bg-[#4A90E2]' : 'bg-transparent'
-          }`}
-        ></div>
-      </div>
+      <button
+        type="button"
+        onClick={() => handleChange('tipo', tipo)}
+        className={`flex-1 py-3 rounded-full font-medium transition-all ${
+          selecionado 
+            ? "bg-[#9B7BFF] text-white shadow-lg" 
+            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+        }`}
+      >
+        {label}
+      </button>
     );
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center p-6">
       {/* Alerta */}
       {alerta && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
           <div
-            className={`px-6 py-4 rounded-lg shadow-lg ${
-              alerta.sucesso ? 'bg-green-500' : 'bg-red-500'
-            } text-white font-ubuntu`}
+            className={`px-6 py-3 rounded-lg shadow-lg ${
+              alerta.sucesso ? "bg-green-500" : "bg-red-500"
+            } text-white font-medium flex items-center gap-2`}
           >
-            {alerta.mensagem}
+            {alerta.sucesso ? "✅" : "❌"} {alerta.mensagem}
           </div>
         </div>
       )}
 
-      <div className="w-full max-w-md px-5">
-        <div className="flex flex-col items-center mb-10">
-          {/* Logo */}
-          <div className="w-[139px] h-[200px] bg-gradient-to-b from-blue-400 to-blue-600 rounded-lg mb-4 flex items-center justify-center">
-            <span className="text-white text-6xl font-bold">P</span>
-          </div>
-
-          {/* Título */}
-          <h1 className="text-5xl font-bold font-ubuntu text-black">Poliedro</h1>
-          <h2 className="text-5xl font-bold font-ubuntu text-[#4A90E2]">
-            Educação
-          </h2>
-        </div>
-
-        {/* Container do Formulário */}
-        <div className="bg-white rounded-2xl shadow-[0_4px_10px_rgba(0,0,0,0.26)] p-5">
-          <h3 className="text-3xl font-bold font-ubuntu text-black mb-5">
-            Cadastro
-          </h3>
-
-          {/* Botões de Tipo de Usuário */}
-          <div className="flex justify-center gap-5 mb-5">
-            <TipoUsuarioBotao tipo="Professor" />
-            <TipoUsuarioBotao tipo="Aluno" />
-          </div>
-
-          {/* Nome */}
-          <div className="mb-4">
-            <label className="block text-base font-ubuntu text-black mb-2">
-              Nome completo
-            </label>
-            <input
-              type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Digite seu nome"
-              className="w-full px-3 py-2 border-2 border-[#4A90E2] rounded-lg focus:outline-none focus:border-[#4A90E2] font-ubuntu caret-[#4A90E2]"
-            />
-          </div>
-
-          {/* Email ou RA */}
-          <div className="mb-4">
-            <label className="block text-base font-ubuntu text-black mb-2">
-              {paginaAtual === 'professor' ? 'Email' : 'RA'}
-            </label>
-            <input
-              type="text"
-              value={emailOrRA}
-              onChange={(e) => setEmailOrRA(e.target.value)}
-              placeholder={
-                paginaAtual === 'professor'
-                  ? 'Digite seu email'
-                  : 'Digite seu RA'
-              }
-              className="w-full px-3 py-2 border-2 border-[#4A90E2] rounded-lg focus:outline-none focus:border-[#4A90E2] font-ubuntu caret-[#4A90E2]"
-            />
-          </div>
-
-          {/* Senha */}
-          <div className="mb-4">
-            <label className="block text-base font-ubuntu text-black mb-2">
-              Senha
-            </label>
-            <div className="relative">
-              <input
-                type={senhaVisivel ? 'text' : 'password'}
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="Crie uma senha"
-                className="w-full px-3 py-2 border-2 border-[#4A90E2] rounded-lg focus:outline-none focus:border-[#4A90E2] font-ubuntu caret-[#4A90E2] pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setSenhaVisivel(!senhaVisivel)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#4A90E2] focus:outline-none"
-              >
-                {senhaVisivel ? (
-                  <Eye className="w-5 h-5" />
-                ) : (
-                  <EyeOff className="w-5 h-5" />
-                )}
-              </button>
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-3xl shadow-2xl p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-[#9B7BFF] rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-white text-2xl">🧬</span>
             </div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Criar Conta</h1>
+            <p className="text-gray-600">Junte-se à nossa plataforma</p>
           </div>
 
-          {/* Confirmar Senha */}
-          <div className="mb-5">
-            <label className="block text-base font-ubuntu text-black mb-2">
-              Confirmar senha
-            </label>
-            <input
-              type={senhaVisivel ? 'text' : 'password'}
-              value={confirmarSenha}
-              onChange={(e) => setConfirmarSenha(e.target.value)}
-              placeholder="Repita sua senha"
-              className="w-full px-3 py-2 border-2 border-[#4A90E2] rounded-lg focus:outline-none focus:border-[#4A90E2] font-ubuntu caret-[#4A90E2]"
-            />
+          {/* Seletor de Tipo */}
+          <div className="bg-gray-100 rounded-full p-1 flex gap-1 mb-6">
+            <TipoUsuarioBotao tipo="paciente" label="Paciente" />
+            <TipoUsuarioBotao tipo="profissional" label="Profissional" />
           </div>
 
-          {/* Botão Cadastrar */}
-          <button
-            onClick={cadastrar}
-            className="w-full bg-[#4A90E2] text-black font-ubuntu text-lg py-[18px] rounded-2xl border-2 border-black hover:bg-[#3a7bc8] transition-colors focus:outline-none"
-          >
-            Cadastrar
-          </button>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Nome */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome Completo
+              </label>
+              <input
+                type="text"
+                value={formData.nome}
+                onChange={(e) => handleChange('nome', e.target.value)}
+                placeholder="Seu nome completo"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                required
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleChange('email', e.target.value)}
+                placeholder="seu@email.com"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                required
+              />
+            </div>
+
+            {/* Sexo (apenas para pacientes) */}
+            {formData.tipo === 'paciente' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sexo
+                </label>
+                <select
+                  value={formData.sexo}
+                  onChange={(e) => handleChange('sexo', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                  required
+                >
+                  <option value="">Selecione</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Feminino</option>
+                </select>
+              </div>
+            )}
+
+            {/* Senha */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Senha
+              </label>
+              <div className="relative">
+                <input
+                  type={senhaVisivel ? "text" : "password"}
+                  value={formData.senha}
+                  onChange={(e) => handleChange('senha', e.target.value)}
+                  placeholder="Crie uma senha forte"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition pr-12"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setSenhaVisivel(!senhaVisivel)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                >
+                  {senhaVisivel ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Mínimo 8 caracteres, 1 maiúscula, 1 número e 1 símbolo
+              </p>
+            </div>
+
+            {/* Confirmar Senha */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmar Senha
+              </label>
+              <input
+                type={senhaVisivel ? "text" : "password"}
+                value={formData.confirmarSenha}
+                onChange={(e) => handleChange('confirmarSenha', e.target.value)}
+                placeholder="Repita sua senha"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                required
+              />
+            </div>
+
+            {/* Botão de Cadastro */}
+            <button
+              type="submit"
+              disabled={carregando}
+              className="w-full bg-[#9B7BFF] text-white py-3 rounded-xl font-medium hover:bg-[#8B6BFF] disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg hover:shadow-xl mt-6"
+            >
+              {carregando ? "Cadastrando..." : "Criar Conta"}
+            </button>
+
+            {/* Link para login */}
+            <div className="text-center">
+              <p className="text-gray-600">
+                Já tem uma conta?{" "}
+                <a href="/login" className="text-[#9B7BFF] hover:underline font-medium">
+                  Fazer login
+                </a>
+              </p>
+            </div>
+          </form>
         </div>
       </div>
 
       <style jsx>{`
-        @import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;700&display=swap');
-
-        .font-ubuntu {
-          font-family: 'Ubuntu', sans-serif;
-        }
-
         @keyframes fade-in {
           from {
             opacity: 0;

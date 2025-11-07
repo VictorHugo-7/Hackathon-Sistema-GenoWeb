@@ -1,288 +1,444 @@
-import React, { useRef, useState } from "react";
-import logo from "../assets/logo.png";
+import React, { useState, useEffect } from 'react';
+import { profileService, logout } from '../services/api';
 
-export default function HomePage() {
-    const [cancer, setCancer] = useState("Não");
-    const [painel, setPainel] = useState("Não");
-    const [pdfFile, setPdfFile] = useState(null);
-    const [error, setError] = useState("");
-    const [notification, setNotification] = useState("");
-    const [isDragging, setIsDragging] = useState(false);
-    const fileInputRef = useRef(null);
+function Home() {
+  const [user, setUser] = useState(null);
+  const [familia, setFamilia] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [etapa, setEtapa] = useState(1); // 1: Sem família, 2: Com família
+  const [mostrarFormMembro, setMostrarFormMembro] = useState(false);
 
-    // Novo tópico: Criar Família
-    const [criarFamilia, setCriarFamilia] = useState(false); // boolean
-    const [familiaNome, setFamiliaNome] = useState("");
+  useEffect(() => {
+    carregarDadosUsuario();
+    carregarFamilia();
+  }, []);
 
-    function validatePdf(file) {
-        if (!file) return false;
-        const isPdfByType = file.type === "application/pdf";
-        const isPdfByName = file.name?.toLowerCase().endsWith(".pdf");
-        return isPdfByType || isPdfByName;
+  const carregarDadosUsuario = () => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
     }
+  };
 
-    function onPdfChange(e) {
-        setError("");
-        const file = e.target.files?.[0];
-        if (!file) return setPdfFile(null);
-        if (!validatePdf(file)) {
-            setError("Por favor, selecione um arquivo PDF (.pdf).");
-            setPdfFile(null);
-            return;
-        }
-        setPdfFile(file);
+  const carregarFamilia = async () => {
+    try {
+      setCarregando(true);
+      const resultado = await profileService.obterMinhaFamilia();
+      
+      if (resultado.familia) {
+        setFamilia(resultado.familia);
+        setEtapa(2); // Já tem família
+      } else {
+        setEtapa(1); // Precisa criar família
+      }
+    } catch (error) {
+      console.error('Erro ao carregar família:', error);
+    } finally {
+      setCarregando(false);
     }
+  };
 
-    function clearPdf() {
-        setPdfFile(null);
-        setError("");
+  const handleCriarFamilia = async (nomeFamilia) => {
+    try {
+      const resultado = await profileService.criarFamilia(nomeFamilia);
+      if (resultado.familia) {
+        await carregarFamilia(); // Recarrega os dados
+      }
+    } catch (error) {
+      console.error('Erro ao criar família:', error);
+      alert(error.error || 'Erro ao criar família');
     }
+  };
 
-    function showNotification(message) {
-        setNotification(message);
-        setTimeout(() => setNotification(""), 2500);
+  const handleAdicionarMembro = async (dadosMembro) => {
+    try {
+      // Converter diagnostico_previo para boolean
+      const dadosFormatados = {
+        ...dadosMembro,
+        diagnostico_previo: dadosMembro.diagnostico_previo === 'sim'
+      };
+
+      const resultado = await profileService.adicionarMembro(dadosFormatados);
+      if (resultado.membro) {
+        await carregarFamilia(); // Recarrega para ver o novo membro
+        setMostrarFormMembro(false);
+        alert('Membro adicionado com sucesso!');
+        return resultado;
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar membro:', error);
+      alert(error.error || 'Erro ao adicionar membro');
+      throw error;
     }
+  };
 
-    function handleSaveCancer() {
-        localStorage.setItem("diagnostico_cancer", cancer);
-        showNotification(`Diagnóstico de Câncer salvo: ${cancer}`);
+  const handleSairFamilia = async () => {
+    if (confirm('Tem certeza que deseja sair da família?')) {
+      try {
+        await profileService.sairDaFamilia();
+        setFamilia(null);
+        setEtapa(1);
+      } catch (error) {
+        console.error('Erro ao sair da família:', error);
+      }
     }
+  };
 
-    function handleSavePainel() {
-        if (painel === "Sim" && !pdfFile) {
-            setError("Para salvar com 'Sim', adicione um PDF do painel genético.");
-            return;
-        }
-        localStorage.setItem(
-            "painel_genetico",
-            JSON.stringify({ painel, pdfName: pdfFile ? pdfFile.name : null })
-        );
-        showNotification(
-            painel === "Sim"
-                ? `Painel Genético salvo: Sim (${pdfFile?.name || "sem nome"})`
-                : "Painel Genético salvo: Não"
-        );
-    }
-
-    function handleDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(true);
-    }
-
-    function handleDragLeave(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-    }
-
-    function handleDrop(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-        setError("");
-        const file = e.dataTransfer?.files?.[0];
-        if (!file) return;
-        if (!validatePdf(file)) {
-            setError("Apenas PDF é permitido (.pdf).");
-            setPdfFile(null);
-            return;
-        }
-        setPdfFile(file);
-    }
-
-    function openFilePicker() {
-        fileInputRef.current?.click();
-    }
-
-    const styles = {
-        page: { fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", background: "#f7f7fb", minHeight: "100vh", position: "relative" },
-        container: { maxWidth: 900, margin: "0 auto", padding: "24px" },
-        navbar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", background: "#111827", color: "#fff", position: "sticky", top: 0, zIndex: 10 },
-        brand: { display: "flex", alignItems: "center", gap: 12 },
-        logo: { height: 40, width: 40, objectFit: "contain", borderRadius: 6 },
-        card: { background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 8px 24px rgba(0,0,0,0.08)", marginTop: 20 },
-        title: { fontSize: 20, fontWeight: 700, marginBottom: 10, color: "#111827" },
-        row: { display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" },
-        radio: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" },
-        hint: { color: "#6b7280", fontSize: 13, marginTop: 6 },
-        uploadZone: (active) => ({
-            border: `2px dashed ${active ? "#2563eb" : "#d1d5db"}`,
-            borderRadius: 12,
-            padding: 24,
-            background: active ? "#eff6ff" : "#f9fafb",
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            gap: 10,
-        }),
-        fileInfo: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 10, padding: 12, borderRadius: 10, background: "#eef2ff", width: "100%", maxWidth: 480 },
-        buttonPrimary: { padding: "10px 14px", borderRadius: 10, border: "1px solid #111827", background: "#111827", color: "#fff", cursor: "pointer" },
-        remove: { padding: "8px 12px", borderRadius: 8, border: "1px solid #ef4444", background: "#fff1f2", color: "#b91c1c", cursor: "pointer" },
-        error: { color: "#b91c1c", marginTop: 8, fontSize: 14 },
-        actionsRow: { display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 12, flexWrap: "wrap" },
-        notification: {
-            position: "fixed",
-            top: 20,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#16a34a",
-            color: "white",
-            padding: "10px 20px",
-            borderRadius: 10,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            fontWeight: 600,
-            zIndex: 1000,
-            transition: "opacity 0.3s ease",
-        },
-        input: { width: "100%", maxWidth: 480, padding: 10, borderRadius: 10, border: "1px solid #e5e7eb", outline: "none" },
-    };
-
+  if (carregando) {
     return (
-        <div style={styles.page}>
-            {notification && <div style={styles.notification}>✅ {notification}</div>}
-
-            <header style={styles.navbar}>
-                <div style={styles.brand}>
-                    <img src={logo} alt="Logo" style={styles.logo} />
-                    <strong style={{ fontSize: 18 }}>GeneWeb</strong>
-                </div>
-            </header>
-
-            <main style={styles.container}>
-                {/* Diagnóstico de Câncer */}
-                <section style={styles.card}>
-                    <h2 style={styles.title}>Diagnóstico de Câncer</h2>
-                    <div style={styles.row}>
-                        <label style={styles.radio}>
-                            <input type="radio" name="cancer" value="Sim" checked={cancer === "Sim"} onChange={(e) => setCancer(e.target.value)} />
-                            <span>Sim</span>
-                        </label>
-                        <label style={styles.radio}>
-                            <input type="radio" name="cancer" value="Não" checked={cancer === "Não"} onChange={(e) => setCancer(e.target.value)} />
-                            <span>Não</span>
-                        </label>
-                    </div>
-                    <p style={styles.hint}>Selecione se o paciente possui diagnóstico confirmado.</p>
-                    <div style={styles.actionsRow}>
-                        <button type="button" style={styles.buttonPrimary} onClick={handleSaveCancer}>
-                            Salvar Diagnóstico
-                        </button>
-                    </div>
-                </section>
-
-                {/* Painel Genético */}
-                <section style={styles.card}>
-                    <h2 style={styles.title}>Painel Genético</h2>
-                    <div style={styles.row}>
-                        <label style={styles.radio}>
-                            <input type="radio" name="painel" value="Sim" checked={painel === "Sim"} onChange={(e) => setPainel(e.target.value)} />
-                            <span>Sim</span>
-                        </label>
-                        <label style={styles.radio}>
-                            <input type="radio" name="painel" value="Não" checked={painel === "Não"} onChange={(e) => setPainel(e.target.value)} />
-                            <span>Não</span>
-                        </label>
-                    </div>
-                    <p style={styles.hint}>Informe se existe painel genético disponível.</p>
-
-                    {painel === "Sim" && (
-                        <div style={{ marginTop: 16 }}>
-                            {!pdfFile ? (
-                                <div
-                                    style={styles.uploadZone(isDragging)}
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleDrop}
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    <div style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>Arraste e solte o PDF aqui</div>
-                                    <div style={{ fontSize: 13, color: "#6b7280" }}>
-                                        ou <span style={{ textDecoration: "underline" }}>clique</span> para selecionar um arquivo
-                                    </div>
-                                    <input
-                                        ref={fileInputRef}
-                                        id="pdfUpload"
-                                        type="file"
-                                        accept="application/pdf,.pdf"
-                                        onChange={onPdfChange}
-                                        style={{ display: "none" }}
-                                    />
-                                </div>
-                            ) : (
-                                <div style={styles.fileInfo}>
-                                    <div>
-                                        <div style={{ fontWeight: 600 }}>{pdfFile.name}</div>
-                                        <div style={{ fontSize: 12, color: "#374151" }}>{(pdfFile.size / 1024).toFixed(1)} KB</div>
-                                    </div>
-                                    <button type="button" onClick={clearPdf} style={styles.remove}>
-                                        Remover
-                                    </button>
-                                </div>
-                            )}
-
-                            {error && <div style={styles.error}>{error}</div>}
-                        </div>
-                    )}
-
-                    <div style={styles.actionsRow}>
-                        <button type="button" style={styles.buttonPrimary} onClick={handleSavePainel}>
-                            Salvar Painel
-                        </button>
-                    </div>
-                </section>
-
-                {/* Criar Família */}
-                <section style={styles.card}>
-                    <h2 style={styles.title}>Criar Família</h2>
-
-                    <div style={styles.row}>
-                        <label style={styles.radio}>
-                            <input
-                                type="radio"
-                                name="criarFamilia"
-                                value="true"
-                                checked={criarFamilia === true}
-                                onChange={() => setCriarFamilia(true)}
-                            />
-                            <span>Sim</span>
-                        </label>
-
-                        <label style={styles.radio}>
-                            <input
-                                type="radio"
-                                name="criarFamilia"
-                                value="false"
-                                checked={criarFamilia === false}
-                                onChange={() => {
-                                    setCriarFamilia(false);
-                                    setFamiliaNome(""); // limpa o campo quando marcar "Não"
-                                }}
-                            />
-                            <span>Não</span>
-                        </label>
-                    </div>
-
-                    <p style={styles.hint}>Escolha se deseja criar uma nova família.</p>
-
-                    {criarFamilia && (
-                        <div style={{ marginTop: 12 }}>
-                            <input
-                                type="text"
-                                placeholder="Nome da família"
-                                value={familiaNome}
-                                onChange={(e) => setFamiliaNome(e.target.value)}
-                                style={styles.input}
-                                autoFocus   // foca automaticamente no campo ao aparecer
-                            />
-                        </div>
-                    )}
-                </section>
-
-            </main>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-[#9B7BFF] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando...</p>
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-[#9B7BFF] rounded-lg flex items-center justify-center mr-3">
+                <span className="text-white text-sm">🧬</span>
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">GenoWeb</h1>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              {user && (
+                <span className="text-gray-700">
+                  Olá, {user.nome}
+                </span>
+              )}
+              <button
+                onClick={logout}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition"
+              >
+                Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Conteúdo Principal */}
+      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {etapa === 1 && (
+          <div className="bg-white rounded-2xl shadow-lg p-8">
+            <FamilyCreation onFamilyCreate={handleCriarFamilia} />
+          </div>
+        )}
+        
+        {etapa === 2 && familia && (
+          <div className="bg-white rounded-2xl shadow-lg p-8">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-800">
+                  Família {familia.nome_familia}
+                </h2>
+                <p className="text-gray-600 mt-2">
+                  Gerencie os membros da sua família
+                </p>
+              </div>
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setMostrarFormMembro(true)}
+                  className="bg-[#9B7BFF] hover:bg-[#8B6BFF] text-white px-6 py-2 rounded-lg transition"
+                >
+                  + Adicionar Membro
+                </button>
+                <button
+                  onClick={handleSairFamilia}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition"
+                >
+                  Sair da Família
+                </button>
+              </div>
+            </div>
+
+            {mostrarFormMembro && (
+              <div className="mb-8">
+                <MemberForm 
+                  onSave={handleAdicionarMembro}
+                  onCancel={() => setMostrarFormMembro(false)}
+                  isEditing={false}
+                />
+              </div>
+            )}
+
+            <MembersList 
+              members={familia.membros || []}
+              onEditMember={(membro) => {
+                // Implementar edição se necessário
+                console.log('Editar membro:', membro);
+              }}
+              onRemoveMember={(membroId) => {
+                // Implementar remoção se necessário
+                console.log('Remover membro:', membroId);
+              }}
+            />
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
+
+// Componente FamilyCreation
+const FamilyCreation = ({ onFamilyCreate }) => {
+  const [familyName, setFamilyName] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (familyName.trim()) {
+      onFamilyCreate(familyName);
+    }
+  };
+
+  return (
+    <div className="text-center">
+      <div className="mb-8">
+        <div className="text-6xl mb-4">🏠</div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          Criar Nova Família
+        </h2>
+        <p className="text-gray-600">
+          Comece criando um nome para sua família. Este nome será usado para identificar 
+          todos os membros do seu grupo familiar.
+        </p>
+      </div>
+      
+      <form onSubmit={handleSubmit} className="max-w-md mx-auto">
+        <div className="mb-4">
+          <label htmlFor="familyName" className="block text-sm font-medium text-gray-700 mb-2">
+            Nome da Família
+          </label>
+          <input
+            type="text"
+            id="familyName"
+            value={familyName}
+            onChange={(e) => setFamilyName(e.target.value)}
+            placeholder="Ex: Família Silva, Família Santos..."
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+            required
+          />
+          <p className="text-sm text-gray-500 mt-2">
+            Escolha um nome que represente seu grupo familiar
+          </p>
+        </div>
+        
+        <button 
+          type="submit" 
+          className="w-full bg-[#9B7BFF] hover:bg-[#8B6BFF] text-white py-3 rounded-xl font-medium transition shadow-lg"
+        >
+          Criar Família
+        </button>
+      </form>
+    </div>
+  );
+};
+
+// Componente MemberForm
+const MemberForm = ({ onSave, onCancel, isEditing, member }) => {
+  const [formData, setFormData] = useState({
+    nome: member?.nome || '',
+    email: member?.email || '',
+    data_nascimento: member?.data_nascimento || '',
+    sexo: member?.sexo || '',
+    diagnostico_previo: member?.diagnostico_previo ? 'sim' : 'nao'
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (formData.nome && formData.data_nascimento && formData.sexo && formData.diagnostico_previo) {
+      onSave(formData);
+    } else {
+      alert('Preencha todos os campos obrigatórios!');
+    }
+  };
+
+  return (
+    <div className="bg-gray-50 rounded-lg p-6">
+      <h3 className="text-xl font-bold mb-4">
+        {isEditing ? 'Editar Membro' : 'Adicionar Novo Membro'}
+      </h3>
+      
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Nome Completo *
+          </label>
+          <input
+            type="text"
+            name="nome"
+            value={formData.nome}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9B7BFF]"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Email
+          </label>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Opcional"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9B7BFF]"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Data de Nascimento *
+            </label>
+            <input
+              type="date"
+              name="data_nascimento"
+              value={formData.data_nascimento}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9B7BFF]"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Sexo *
+            </label>
+            <select
+              name="sexo"
+              value={formData.sexo}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9B7BFF]"
+              required
+            >
+              <option value="">Selecione</option>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
+              <option value="O">Outro</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Diagnóstico Prévio *
+          </label>
+          <select
+            name="diagnostico_previo"
+            value={formData.diagnostico_previo}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9B7BFF]"
+            required
+          >
+            <option value="">Selecione</option>
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </select>
+        </div>
+
+        <div className="flex space-x-4">
+          <button
+            type="submit"
+            className="bg-[#9B7BFF] hover:bg-[#8B6BFF] text-white px-6 py-2 rounded-lg transition"
+          >
+            {isEditing ? 'Atualizar' : 'Adicionar'}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// Componente MembersList
+const MembersList = ({ members, onEditMember, onRemoveMember }) => {
+  if (members.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-6xl mb-4">🧬</div>
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">
+          Nenhum membro adicionado
+        </h3>
+        <p className="text-gray-500">
+          Comece adicionando o primeiro membro da sua família
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="text-xl font-semibold mb-4">
+        Membros da Família ({members.length})
+      </h3>
+      <div className="grid gap-4">
+        {members.map((member) => (
+          <div key={member.idPaciente} className="border rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="text-2xl">
+                {member.sexo === 'M' ? '👨' : member.sexo === 'F' ? '👩' : '👤'}
+              </div>
+              <div>
+                <h4 className="font-semibold">{member.nome}</h4>
+                {member.email && (
+                  <p className="text-gray-600 text-sm">{member.email}</p>
+                )}
+                <div className="text-sm text-gray-500">
+                  <span>Nascimento: {new Date(member.data_nascimento).toLocaleDateString('pt-BR')}</span>
+                  {member.diagnostico_previo && (
+                    <span className="ml-2 bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">
+                      Diagnóstico Prévio
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => onEditMember(member)}
+                className="text-blue-600 hover:text-blue-800"
+                title="Editar membro"
+              >
+                ✏️
+              </button>
+              <button 
+                onClick={() => onRemoveMember(member.idPaciente)}
+                className="text-red-600 hover:text-red-800"
+                title="Remover membro"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Home;
