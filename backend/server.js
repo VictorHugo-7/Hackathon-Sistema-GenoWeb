@@ -1,18 +1,28 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import authRoutes from "./backend/auth.js";
-import profileRoutes from "./backend/profile.js";
 
+// ⚠️ DOTENV PRIMEIRO - antes de qualquer import que use process.env
 dotenv.config();
+
+console.log('🔧 Carregando variáveis de ambiente...');
+console.log('DB_HOST:', process.env.DB_HOST);
+console.log('DB_USER:', process.env.DB_USER);
+console.log('DB_NAME:', process.env.DB_NAME);
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? '✓ Definido' : '✗ Indefinido');
+
 const app = express();
 app.use(express.json());
 
-// CORS - permitindo o frontend na porta 5173 (Vite)
+// CORS
 app.use(cors({ 
   origin: "http://localhost:5173", 
   credentials: true 
 }));
+
+// ⚠️ Importações DEPOIS do dotenv.config() - agora com caminhos relativos corretos
+import authRoutes from "./auth.js";
+import profileRoutes from "./profile.js";
 
 // Rotas
 app.use("/auth", authRoutes);
