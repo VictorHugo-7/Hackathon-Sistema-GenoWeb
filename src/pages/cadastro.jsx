@@ -9,6 +9,7 @@ export default function Cadastro() {
     senha: '',
     confirmarSenha: '',
     sexo: '',
+    data_nascimento: '',
     tipo: 'paciente' // 'paciente' ou 'profissional'
   });
   const [senhaVisivel, setSenhaVisivel] = useState(false);
@@ -25,10 +26,25 @@ export default function Cadastro() {
     return regex.test(senha);
   };
 
+  const validarEmail = (email) => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
+
+  const validarDataNascimento = (data) => {
+    if (!data) return false;
+    
+    const dataNasc = new Date(data);
+    const hoje = new Date();
+    const idade = hoje.getFullYear() - dataNasc.getFullYear();
+    
+    return dataNasc instanceof Date && !isNaN(dataNasc) && idade >= 1 && idade <= 120;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const { nome, email, senha, confirmarSenha, sexo, tipo } = formData;
+    const { nome, email, senha, confirmarSenha, sexo, data_nascimento, tipo } = formData;
 
     // Validações
     if (!nome || !email || !senha || !confirmarSenha) {
@@ -36,8 +52,13 @@ export default function Cadastro() {
       return;
     }
 
-    if (tipo === 'paciente' && !sexo) {
-      mostrarAlerta('Selecione o sexo!', false);
+    if (tipo === 'paciente' && (!sexo || !data_nascimento)) {
+      mostrarAlerta('Selecione o sexo e preencha a data de nascimento!', false);
+      return;
+    }
+
+    if (!validarEmail(email)) {
+      mostrarAlerta('Por favor, insira um email válido!', false);
       return;
     }
 
@@ -51,6 +72,11 @@ export default function Cadastro() {
       return;
     }
 
+    if (tipo === 'paciente' && !validarDataNascimento(data_nascimento)) {
+      mostrarAlerta('Data de nascimento inválida. A pessoa deve ter entre 1 e 120 anos.', false);
+      return;
+    }
+
     setCarregando(true);
 
     try {
@@ -61,7 +87,8 @@ export default function Cadastro() {
           nome,
           email,
           senha,
-          sexo
+          sexo,
+          data_nascimento
         });
       } else {
         resultado = await authService.cadastrarProfissional({
@@ -116,6 +143,11 @@ export default function Cadastro() {
     );
   };
 
+  // Calcular idade máxima e mínima para o date picker
+  const hoje = new Date();
+  const dataMinima = new Date(hoje.getFullYear() - 120, hoje.getMonth(), hoje.getDate());
+  const dataMaxima = new Date(hoje.getFullYear() - 1, hoje.getMonth(), hoje.getDate());
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center p-6">
       {/* Alerta */}
@@ -152,7 +184,7 @@ export default function Cadastro() {
             {/* Nome */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nome Completo
+                Nome Completo *
               </label>
               <input
                 type="text"
@@ -167,7 +199,7 @@ export default function Cadastro() {
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
+                Email *
               </label>
               <input
                 type="email"
@@ -179,11 +211,32 @@ export default function Cadastro() {
               />
             </div>
 
+            {/* Data de Nascimento (apenas para pacientes) */}
+            {formData.tipo === 'paciente' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data de Nascimento *
+                </label>
+                <input
+                  type="date"
+                  value={formData.data_nascimento}
+                  onChange={(e) => handleChange('data_nascimento', e.target.value)}
+                  min={dataMinima.toISOString().split('T')[0]}
+                  max={dataMaxima.toISOString().split('T')[0]}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#9B7BFF] focus:border-transparent transition"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Data de nascimento é obrigatória para pacientes
+                </p>
+              </div>
+            )}
+
             {/* Sexo (apenas para pacientes) */}
             {formData.tipo === 'paciente' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sexo
+                  Sexo *
                 </label>
                 <select
                   value={formData.sexo}
@@ -201,7 +254,7 @@ export default function Cadastro() {
             {/* Senha */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Senha
+                Senha *
               </label>
               <div className="relative">
                 <input
@@ -228,7 +281,7 @@ export default function Cadastro() {
             {/* Confirmar Senha */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirmar Senha
+                Confirmar Senha *
               </label>
               <input
                 type={senhaVisivel ? "text" : "password"}

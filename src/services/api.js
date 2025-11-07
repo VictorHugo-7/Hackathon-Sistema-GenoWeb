@@ -16,14 +16,20 @@ const getAuthHeaders = () => {
 
 // Serviço de autenticação
 export const authService = {
-  // Cadastro de paciente
+  // Cadastro de paciente (ATUALIZADO com data_nascimento)
   async cadastrarPaciente(dados) {
     const response = await fetch(`${API_BASE_URL}/auth/paciente/cadastro`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(dados),
+      body: JSON.stringify({
+        nome: dados.nome,
+        email: dados.email,
+        senha: dados.senha,
+        sexo: dados.sexo,
+        data_nascimento: dados.data_nascimento // Adicionado
+      }),
     });
     return await response.json();
   },
