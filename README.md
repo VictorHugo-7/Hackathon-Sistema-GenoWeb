@@ -16,7 +16,13 @@
 <!--FUNCIONALIDADES-->
 ## Funcionalidades 
 ````
+Paciente:
+    . Analizar Exame
+    . Criar Família
+    . Adicionar Membro Família
 
+Médico:
+    . Visualizar Estatísticas Família
 ````
 
 
@@ -29,13 +35,14 @@
 
 <!--PROTÓTIPO-->
 ## Protótipo
+[![](https://img.shields.io/badge/Figma--5C5C5C?logo=figma&logoColor=white)](https://www.figma.com/design/dmEOyAwkEgluPLzzdCh2AT/Hackathon-Sistema-GenoWeb?node-id=2-2&t=LPylzjyRKCfCaVjC-1)
 
 
 <!--PARTICIPANTES-->
 ## Participantes
 | Nome                            |
 |---------------------------------|
-| Alvaro Nogueira Junqueira Souza	|
+| Alvaro Nogueira Junqueira Souza |
 | Antônio Vítor Bozzo de Napoli   |
 | Felipe Brito Moulin Rodrigues   |
 | Luan Camara Lopes	              |
@@ -139,28 +146,27 @@ Execução:
 │   ├── test-env.js
 │   └── python/
 │       └── main.py
-└── src/
-    ├── App.css
-    ├── App.jsx
-    ├── global.css
-    ├── main.jsx
-    ├── ProfilePage.css
-    ├── components/
-    │   ├── FamilyCreation.jsx
-    │   ├── FamilyMembers.jsx
-    │   ├── Header.jsx
-    │   ├── Memberform.jsx
-    │   ├── MembersList.jsx
-    │   └── navbar.jsx
-    ├── pages/
-    │   ├── cadastro.jsx
-    │   ├── home.jsx
-    │   ├── login.jsx
-    │   ├── medico.jsx
-    │   ├── paciente.jsx
-    │   └── perfil.tsx
-    └── services/
-        └── api.js
+├── src/
+│   ├── App.css
+│   ├── App.jsx
+│   ├── global.css
+│   ├── main.jsx
+│   ├── components/
+│   │   ├── FamilyCreation.jsx
+│   │   ├── FamilyMembers.jsx
+│   │   ├── Header.jsx
+│   │   ├── Memberform.jsx
+│   │   ├── MembersList.jsx
+│   │   └── navbar.jsx
+│   ├── pages/
+│   │   ├── cadastro.jsx
+│   │   ├── home.jsx
+│   │   ├── login.jsx
+│   │   ├── medico.jsx
+│   │   ├── paciente.jsx
+│   │   └── perfil.tsx
+│   └── services/
+│       └── api.js
 ├── .gitignore
 ├── README.md
 ├── eslint.config.js
