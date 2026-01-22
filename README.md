@@ -6,7 +6,7 @@
 > Sistema desenvolvido no 2º Hackathon entre o Instituto Mauá de Tecnologia e o Centro Universitário São Camilo.<br/>
 > O sistema consiste em um genograma digital voltado ao cruzamento de dados genéticos familiares, com foco em agilizar o diagnóstico de padrões hereditários e auxiliar na prevenção de doenças genéticas.<br/>
 > 🏆 Projeto vencedor do 1º lugar no Hackathon.
-<!--✔ Concluído. Sistema desenvolvido no 2º Hackathon entre o Instituto Mauá de Tecnologia e o Centro Universitário São Camilo.-->
+
 
 <!--STATUS-->
 ## Status
